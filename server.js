@@ -3,12 +3,20 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import puppeteer from 'puppeteer';
 import axios from 'axios';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get directory name in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const GOOGLE_API_KEY = process.env.VITE_GOOGLE_API_KEY || 'your-api-key';
+const isProd = process.env.NODE_ENV === 'production';
+const isVercel = process.env.VERCEL === '1';
 
 // Helper function for waiting
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -16,6 +24,11 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the dist directory in production
+if (isProd && !isVercel) {
+  app.use(express.static(path.join(__dirname, 'dist')));
+}
 
 // Google Places API proxy
 app.get('/api/places/autocomplete', async (req, res) => {
@@ -58,18 +71,26 @@ app.post('/api/scrape-reviews', async (req, res) => {
     
     console.log('Attempting to scrape reviews from:', targetUrl);
     
-    // Launch browser with additional options to handle common errors
-    const browser = await puppeteer.launch({ 
-      headless: 'new',
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox', 
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ],
-      ignoreHTTPSErrors: true
-    });
+    // Set options for Puppeteer based on environment (Vercel vs regular)
+    const puppeteerOptions = isVercel ? 
+      { 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        headless: 'new'
+      } : 
+      { 
+        headless: 'new',
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--disable-gpu'
+        ],
+        ignoreHTTPSErrors: true
+      };
+    
+    // Launch browser with options
+    const browser = await puppeteer.launch(puppeteerOptions);
     
     const page = await browser.newPage();
     
@@ -104,12 +125,14 @@ app.post('/api/scrape-reviews', async (req, res) => {
       console.log('No consent dialog found or error clicking it');
     }
     
-    // Take a screenshot to see what's happening
-    try {
-      await page.screenshot({ path: 'google-maps-page.png' });
-      console.log('Saved screenshot to google-maps-page.png');
-    } catch (err) {
-      console.log('Failed to save screenshot:', err.message);
+    // Take screenshots only in development environment
+    if (!isProd) {
+      try {
+        await page.screenshot({ path: 'google-maps-page.png' });
+        console.log('Saved screenshot to google-maps-page.png');
+      } catch (err) {
+        console.log('Failed to save screenshot:', err.message);
+      }
     }
     
     // Directly look for reviews section without waiting for a specific element
@@ -150,11 +173,13 @@ app.post('/api/scrape-reviews', async (req, res) => {
       await wait(1000);
     }
     
-    // Take another screenshot after scrolling
-    try {
-      await page.screenshot({ path: 'google-maps-scrolled.png' });
-    } catch (err) {
-      console.log('Failed to save screenshot after scrolling:', err.message);
+    // Take another screenshot after scrolling if in development
+    if (!isProd) {
+      try {
+        await page.screenshot({ path: 'google-maps-scrolled.png' });
+      } catch (err) {
+        console.log('Failed to save screenshot after scrolling:', err.message);
+      }
     }
     
     // Analyze the page structure to find reviews
@@ -276,7 +301,27 @@ app.post('/api/scrape-reviews', async (req, res) => {
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-}); 
+// Serve the main app for any other routes in production (non-Vercel)
+if (isProd && !isVercel) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
+}
+
+// For Vercel, we need to export the Express app
+if (isVercel) {
+  // Export for serverless environment
+  export default app;
+} else {
+  // Start the server for traditional hosting
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Environment: ${isProd ? 'Production' : 'Development'}`);
+    if (isProd) {
+      console.log(`Application is available at http://localhost:${PORT}`);
+    } else {
+      console.log(`API is available at http://localhost:${PORT}/api`);
+      console.log(`Frontend dev server should be started separately with 'npm run dev'`);
+    }
+  });
+} 
