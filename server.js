@@ -308,12 +308,8 @@ if (isProd && !isVercel) {
   });
 }
 
-// For Vercel, we need to export the Express app
-if (isVercel) {
-  // Export for serverless environment
-  export default app;
-} else {
-  // Start the server for traditional hosting
+// Start the server for traditional hosting if not on Vercel
+if (!isVercel) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Environment: ${isProd ? 'Production' : 'Development'}`);
@@ -324,4 +320,7 @@ if (isVercel) {
       console.log(`Frontend dev server should be started separately with 'npm run dev'`);
     }
   });
-} 
+}
+
+// Export the Express app for Vercel
+export default app; 
