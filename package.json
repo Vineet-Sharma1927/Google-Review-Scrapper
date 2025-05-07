@@ -18,7 +18,7 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "framer-motion": "^12.10.0",
-    "puppeteer": "^24.8.0",
+    "puppeteer": "^24.8.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
