@@ -31,6 +31,12 @@ A modern web application built with React, Tailwind CSS, and Framer Motion that 
    ```
    node server.js
    ```
+6. ## Setup Note for Reviewers
+If you get an error like "Could not find Chrome", please run:
+
+```bash
+npx puppeteer browsers install chrome
+
 
 ## Required API Keys
 
